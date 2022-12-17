@@ -1,10 +1,11 @@
 let web3;
 let user;
+let contract;
 
 const mEthPrice = 1600;
 const currentYear = 2022;
 
-const contract_address = ""; // 따옴표 안에 주소값 복사 붙여넣기
+const contract_address = "0x5e3E7735A8B3C19405CfE33cfc88e3f2b682B5ad"; // 따옴표 안에 주소값 복사 붙여넣기
 
 const logIn = async () => {
   const ID = prompt("choose your ID");
@@ -16,6 +17,7 @@ const logIn = async () => {
   // web3 = await metamaskRequest();
 
   user = await getAccountInfos(Number(ID));
+  contract = await getRoomShareContract();
 
   await _updateUserAddress(user);
   await _updateUserBalance(user);
@@ -72,6 +74,7 @@ const _updateUserBalance = async (address) => {
 }
 
 const _updateRooms = () => {
+  console.log("called updateRooms")
   displayAllRooms();
   listAllRooms();
 }
@@ -158,11 +161,16 @@ const _shareRoom = async (name, location, price) => {
   // 에러 발생시 call 또는 send 함수의 파라미터에 from, gas 필드 값을 제대로 넣었는지 확인한다. (e.g. {from: ..., gas: 3000000, ...})
   // 트랜잭션이 올바르게 발생하면 알림 팝업을 띄운다. (e.g. alert("등록"))
   // 화면을 업데이트 한다.
+
+  await contract.methods.shareRoom(name, location, price).send({from: user, gas: 3000000});
+  alert("등록");
+  _updateRooms();
 }
 
 
 const _getMyRents = async () => {
   // 내가 대여한 방 리스트를 불러온다.
+  const myRents = await contract.methods.getMyRents().call({from: user, gas: 3000000});
   return myRents;
 }
 
@@ -183,7 +191,7 @@ const displayMyRents = async () => {
 
 const _getAllRooms = async () => {
   // Room ID 를 기준으로 컨트랙트에 등록된 모든 방 객체의 데이터를 불러온다.
-  return rooms;
+  return await contract.methods.getAllRooms().call({from: user, gas: 3000000});
 }
 
 const displayAllRooms = async () => {
@@ -231,7 +239,7 @@ const returnOptionsJSON = () => {
 
 const calculatePrice = (checkInDate,checkOutDate) => {
   const jsonobj = returnOptionsJSON();
-  const price = Number(jsonobj.price);
+  const price = Number(jsonobj[4]);
   const _price = (checkOutDate-checkInDate)*price;
   return _price;
 }
@@ -249,7 +257,8 @@ const rentRoom = async () => {
 
   const _price = calculatePrice(checkInDate,checkOutDate);
   const jsonobj = returnOptionsJSON();
-  const roomId = jsonobj.id;
+  console.log(jsonobj);
+  const roomId = jsonobj[0];
 
   await _rentRoom(roomId, currentYear, checkInDate, checkOutDate, _price);
 
@@ -265,6 +274,13 @@ const _rentRoom = async (roomId, currentYear, checkInDate, checkOutDate, price) 
   // 단위는 finney = milli Eth (10^15)
   // Room ID에 해당하는 방이 체크인하려는 날짜에 대여되어서 대여되지 않는다면 _recommendDate 함수를 호출한다.
   // 화면을 업데이트 한다.
+  try {
+    await contract.methods.rentRoom(roomId, currentYear, checkInDate, checkOutDate).send({from: user, gas: 3000000, value: price * Math.pow(10, 15)});
+  } catch(e) {
+    await _recommendDate(roomId, checkInDate, checkOutDate);
+  } 
+  
+  _updateRents();
 }
 
 const _recommendDate = async (roomId, checkInDate, checkOutDate) => {
@@ -273,6 +289,10 @@ const _recommendDate = async (roomId, checkInDate, checkOutDate) => {
   // checkInDate <= 대여된 체크인 날짜 , 대여된 체크아웃 날짜 < checkOutDate
   // 체크아웃 날짜에는 퇴실하여야하며, 해당일까지 숙박을 이용하려면 체크아웃날짜는 그 다음날로 변경하여야한다.
   // 주어진 헬퍼 함수 dateFromDay 를 이용한다.
+  const recommendDate = await contract.methods.recommendDate(roomId, checkInDate, checkOutDate).call();
+  const recommendCheckInDate = dateFromDay(currentYear, recommendDate[0]).toDateString();
+  const recommendCheckOutDate = dateFromDay(currentYear, recommendDate[1]).toDateString();
+  alert(`recommend checkInDate: ${recommendCheckInDate}\nrecommend checkOutDate: ${recommendCheckOutDate}`);
 }
 
 
@@ -280,7 +300,23 @@ const getRoomRentHistory = async () => {
   // 선택된 방에 대해 그동안 대여했던 사람들의 목록(히스토리)을 불러온다.
   // 빈 배열을 만들고 주어진 헬퍼 함수 returnOptionsJSON 를 사용하여 선택된 방의 ID 값을 이용해 컨트랙트를 호출한다.
   // 헬퍼 함수 dateFromDay 를 이용한다.
+  const jsonobj = returnOptionsJSON();
   
+  let history = [];
+  if (jsonobj) {
+    const roomId = jsonobj[0];
+    const roomRentHistory = await contract.methods.getRoomRentHistory(roomId).call();
+    for (let i = 0; i < roomRentHistory.length; ++i) {
+      history.push(
+        {
+          id: roomRentHistory[i].id, 
+          checkInDate: dateFromDay(roomRentHistory[i].yearOfRent, roomRentHistory[i].checkInDate).toDateString(),
+          checkOutDate: dateFromDay(roomRentHistory[i].yearOfRent, roomRentHistory[i].checkOutDate).toDateString(),
+          renter: roomRentHistory[i].renter
+        })
+    }
+  }
+
   return history
 }
 
