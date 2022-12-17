@@ -5,16 +5,16 @@ let contract;
 const mEthPrice = 1600;
 const currentYear = 2022;
 
-const contract_address = "0x5e3E7735A8B3C19405CfE33cfc88e3f2b682B5ad"; // 따옴표 안에 주소값 복사 붙여넣기
+const contract_address = "0xb72e73F8d4066f6161a66052b6E84AAa86Dde3eE"; // 따옴표 안에 주소값 복사 붙여넣기
 
 const logIn = async () => {
   const ID = prompt("choose your ID");
 
   // 개발 시 (ganache)
-  web3 = new Web3(new Web3.providers.HttpProvider('http://localhost:8545'));
+  // web3 = new Web3(new Web3.providers.HttpProvider('http://localhost:8545'));
 
   // 과제 제출 시 (metamask)
-  // web3 = await metamaskRequest();
+  web3 = await metamaskRequest();
 
   user = await getAccountInfos(Number(ID));
   contract = await getRoomShareContract();
